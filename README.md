@@ -1,7 +1,6 @@
 
 # Bistro Boardroom - Employee Management System
 
-![Bistro Boardroom](public/og-image.png)
 
 Bistro Boardroom is a comprehensive employee management system designed for restaurant and bistro businesses. It provides tools for managing employees, scheduling shifts, tracking attendance, processing payroll, and generating reports.
 
