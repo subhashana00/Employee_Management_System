@@ -65,7 +65,7 @@ export default function EmployeeList() {
       const success = await addEmployee({
         name,
         email,
-        password, // Password is allowed in addEmployee function
+        password,
         role: 'employee',
         jobType,
         hourlyRate: parseFloat(hourlyRate)
@@ -328,23 +328,19 @@ export default function EmployeeList() {
                 
                 <div className="space-y-2">
                   <Label htmlFor="password">Password</Label>
-                  <div className="relative">
+                  <div className="flex items-center">
                     <Input
                       id="password"
                       type={showPassword ? "text" : "password"}
                       value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="••••••••"
+                      onChange={e => setPassword(e.target.value)}
                       required
-                      className="pr-10"
+                      minLength={6}
+                      className="mr-2"
                     />
-                    <button
-                      type="button"
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-                      onClick={() => setShowPassword(!showPassword)}
-                    >
-                      {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                    </button>
+                    <Button type="button" variant="ghost" size="icon" onClick={() => setShowPassword(p => !p)}>
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </Button>
                   </div>
                 </div>
                 

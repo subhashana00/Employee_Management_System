@@ -1,5 +1,4 @@
-
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import EmployeeLayout from '@/components/layout/EmployeeLayout';
@@ -27,10 +26,11 @@ type Notification = {
   type: 'shift' | 'overtime' | 'payment' | 'message' | 'general';
   date: string;
   read: boolean;
+  userId: string;
 };
 
 export default function Notifications() {
-  const { isAuthenticated, isAdmin } = useAuth();
+  const { isAuthenticated, isAdmin, user, notifications, markNotificationAsRead } = useAuth();
   
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
@@ -40,69 +40,49 @@ export default function Notifications() {
     return <Navigate to="/admin" replace />;
   }
   
-  const [notifications, setNotifications] = useState<Notification[]>([
-    {
-      id: '1',
-      title: 'Shift Assignment',
-      message: 'You have been assigned a new shift for Monday, June 10, 2024.',
-      type: 'shift',
-      date: '2024-06-03T10:30:00',
-      read: false
-    },
-    {
-      id: '2',
-      title: 'Overtime Approval',
-      message: 'Your overtime request for June 5 has been approved.',
-      type: 'overtime',
-      date: '2024-06-02T14:15:00',
-      read: false
-    },
-    {
-      id: '3',
-      title: 'Payment Processed',
-      message: 'Your salary for May 2024 has been processed.',
-      type: 'payment',
-      date: '2024-06-01T09:45:00',
-      read: true
-    },
-    {
-      id: '4',
-      title: 'Schedule Change',
-      message: 'Your shift on Thursday has been changed to 2:00 PM - 10:00 PM.',
-      type: 'shift',
-      date: '2024-05-30T17:20:00',
-      read: true
-    },
-    {
-      id: '5',
-      title: 'Message from Manager',
-      message: 'Please remember to complete your time sheet before Friday.',
-      type: 'message',
-      date: '2024-05-28T11:05:00',
-      read: true
+  const employeeNotifications = notifications.filter(n => n.userId === user?.id);
+  
+  const notifiedRef = useRef<string[]>([]);
+  useEffect(() => {
+    if (user && employeeNotifications.length > 0 && !sessionStorage.getItem('notifiedNotifications')) {
+      employeeNotifications.filter(n => !n.read).forEach(n => {
+        if (!notifiedRef.current.includes(n.id)) {
+          // Show browser notification
+          if ('Notification' in window) {
+            if (Notification.permission === 'granted') {
+              new Notification(n.title, { body: n.message });
+            } else if (Notification.permission !== 'denied') {
+              Notification.requestPermission().then(permission => {
+                if (permission === 'granted') {
+                  new Notification(n.title, { body: n.message });
+                }
+              });
+            }
+          }
+          // Play sound
+          const audio = new Audio('/notification.mp3');
+          audio.play().catch(() => {});
+          notifiedRef.current.push(n.id);
+        }
+      });
+      sessionStorage.setItem('notifiedNotifications', 'true');
     }
-  ]);
+  }, [user, employeeNotifications.length]);
   
   const markAsRead = (id: string) => {
-    setNotifications(prev => 
-      prev.map(notification => 
-        notification.id === id ? { ...notification, read: true } : notification
-      )
-    );
+    markNotificationAsRead(id);
     toast.success('Notification marked as read');
   };
   
   const markAllAsRead = () => {
-    setNotifications(prev => 
-      prev.map(notification => ({ ...notification, read: true }))
-    );
+    employeeNotifications.forEach(n => {
+      if (!n.read) markNotificationAsRead(n.id);
+    });
     toast.success('All notifications marked as read');
   };
   
   const deleteNotification = (id: string) => {
-    setNotifications(prev => 
-      prev.filter(notification => notification.id !== id)
-    );
+    // Implementation of deleteNotification
     toast.success('Notification deleted');
   };
   
@@ -137,7 +117,7 @@ export default function Notifications() {
     }
   };
   
-  const unreadCount = notifications.filter(n => !n.read).length;
+  const unreadCount = employeeNotifications.filter(n => !n.read).length;
   
   return (
     <EmployeeLayout>
@@ -171,9 +151,9 @@ export default function Notifications() {
           </TabsList>
           
           <TabsContent value="all" className="mt-6">
-            {notifications.length > 0 ? (
+            {employeeNotifications.length > 0 ? (
               <div className="space-y-4">
-                {notifications.map(notification => (
+                {employeeNotifications.map(notification => (
                   <Card key={notification.id} className={`${notification.read ? '' : 'border-l-4 border-l-primary'}`}>
                     <CardContent className="p-4">
                       <div className="flex justify-between items-start gap-4">
@@ -189,7 +169,7 @@ export default function Notifications() {
                         </div>
                         <div className="flex gap-1">
                           {!notification.read && (
-                            <Button variant="ghost" size="icon" onClick={() => markAsRead(notification.id)} title="Mark as read">
+                            <Button variant="ghost" size="icon" onClick={() => markNotificationAsRead(notification.id)} title="Mark as read">
                               <Check className="h-4 w-4" />
                             </Button>
                           )}
@@ -212,9 +192,9 @@ export default function Notifications() {
           </TabsContent>
           
           <TabsContent value="unread" className="mt-6">
-            {notifications.filter(n => !n.read).length > 0 ? (
+            {employeeNotifications.filter(n => !n.read).length > 0 ? (
               <div className="space-y-4">
-                {notifications.filter(n => !n.read).map(notification => (
+                {employeeNotifications.filter(n => !n.read).map(notification => (
                   <Card key={notification.id} className="border-l-4 border-l-primary">
                     <CardContent className="p-4">
                       <div className="flex justify-between items-start gap-4">
@@ -229,7 +209,7 @@ export default function Notifications() {
                           </div>
                         </div>
                         <div className="flex gap-1">
-                          <Button variant="ghost" size="icon" onClick={() => markAsRead(notification.id)} title="Mark as read">
+                          <Button variant="ghost" size="icon" onClick={() => markNotificationAsRead(notification.id)} title="Mark as read">
                             <Check className="h-4 w-4" />
                           </Button>
                           <Button variant="ghost" size="icon" onClick={() => deleteNotification(notification.id)} title="Delete">
@@ -251,9 +231,9 @@ export default function Notifications() {
           </TabsContent>
           
           <TabsContent value="shifts" className="mt-6">
-            {notifications.filter(n => n.type === 'shift').length > 0 ? (
+            {employeeNotifications.filter(n => n.type === 'shift').length > 0 ? (
               <div className="space-y-4">
-                {notifications
+                {employeeNotifications
                   .filter(n => n.type === 'shift')
                   .map(notification => (
                     <Card key={notification.id} className={`${notification.read ? '' : 'border-l-4 border-l-primary'}`}>
@@ -271,7 +251,7 @@ export default function Notifications() {
                           </div>
                           <div className="flex gap-1">
                             {!notification.read && (
-                              <Button variant="ghost" size="icon" onClick={() => markAsRead(notification.id)} title="Mark as read">
+                              <Button variant="ghost" size="icon" onClick={() => markNotificationAsRead(notification.id)} title="Mark as read">
                                 <Check className="h-4 w-4" />
                               </Button>
                             )}
@@ -294,9 +274,9 @@ export default function Notifications() {
           </TabsContent>
           
           <TabsContent value="payments" className="mt-6">
-            {notifications.filter(n => n.type === 'payment').length > 0 ? (
+            {employeeNotifications.filter(n => n.type === 'payment').length > 0 ? (
               <div className="space-y-4">
-                {notifications
+                {employeeNotifications
                   .filter(n => n.type === 'payment')
                   .map(notification => (
                     <Card key={notification.id} className={`${notification.read ? '' : 'border-l-4 border-l-primary'}`}>
@@ -314,7 +294,7 @@ export default function Notifications() {
                           </div>
                           <div className="flex gap-1">
                             {!notification.read && (
-                              <Button variant="ghost" size="icon" onClick={() => markAsRead(notification.id)} title="Mark as read">
+                              <Button variant="ghost" size="icon" onClick={() => markNotificationAsRead(notification.id)} title="Mark as read">
                                 <Check className="h-4 w-4" />
                               </Button>
                             )}

@@ -10,6 +10,17 @@ interface User {
   photoURL?: string;
   profileImage?: string;
   hourlyRate?: number;
+  password?: string;
+}
+
+interface Notification {
+  id: string;
+  userId: string;
+  title: string;
+  message: string;
+  type: 'shift' | 'overtime' | 'payment' | 'message' | 'general';
+  date: string;
+  read: boolean;
 }
 
 interface AuthContextType {
@@ -34,7 +45,7 @@ interface AuthContextType {
   // Attendance methods
   getAttendance: (userId: string, date?: string) => Attendance | null;
   startShift: (userId: string, date: string, notes?: string, lateInfo?: any, shiftId?: string) => Promise<boolean>;
-  endShift: (userId: string, date: string, notes?: string, overtime?: number) => Promise<boolean>;
+  endShift: (userId: string, date: string, notes?: string, overtime?: number, shiftId?: string) => Promise<boolean>;
   getCurrentShift: (userId: string, date?: string) => any | null;
   getAttendanceReport: (userId: string, period?: string) => AttendanceReport;
   getAttendancesByDate: (date: string) => Attendance[];
@@ -68,6 +79,14 @@ interface AuthContextType {
   
   // Reports
   getAttendanceReports: (period: string) => any;
+  
+  // Notification state
+  notifications: Notification[];
+  markNotificationAsRead: (id: string) => void;
+  
+  // Notes state
+  addNote: (employeeId: string, content: string, category?: string) => Promise<boolean>;
+  getNotesByEmployee: (employeeId: string) => any[];
 }
 
 const AuthContext = React.createContext<AuthContextType | undefined>(undefined);
@@ -77,79 +96,91 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [isAuthenticated, setIsAuthenticated] = React.useState(false);
   const [isAdmin, setIsAdmin] = React.useState(false);
   
-  // Mock employees data
-  const [employees, setEmployees] = React.useState<User[]>([
-    {
-      id: "1",
-      name: "Prabhath@33",
-      email: "admin@bistro.com",
-      role: "admin",
-      jobType: "Manager",
-      profileImage: "/placeholder.svg",
-      hourlyRate: 25
-    },
-    {
-      id: "2",
-      name: "Jane Smith",
-      email: "employee@bistro.com",
-      role: "employee",
-      jobType: "Waiter",
-      profileImage: "/placeholder.svg",
-      hourlyRate: 15
-    },
-    {
-      id: "3",
-      name: "Mike Johnson",
-      email: "mike@bistro.com",
-      role: "employee",
-      jobType: "Chef",
-      profileImage: "/placeholder.svg",
-      hourlyRate: 20
-    },
-    {
-      id: "4",
-      name: "Sarah Williams",
-      email: "sarah@bistro.com",
-      role: "employee",
-      jobType: "Bartender",
-      profileImage: "/placeholder.svg",
-      hourlyRate: 18
-    }
-  ]);
+  // Load employees from localStorage or use default
+  const [employees, setEmployees] = React.useState<User[]>(() => {
+    const stored = localStorage.getItem('employees');
+    if (stored) return JSON.parse(stored);
+    return [
+      {
+        id: "1",
+        name: "Prabhath@33",
+        email: "admin@bistro.com",
+        role: "admin",
+        jobType: "Manager",
+        profileImage: "/placeholder.svg",
+        hourlyRate: 25,
+        password: "admin123"
+      },
+      {
+        id: "2",
+        name: "Jane Smith",
+        email: "employee@bistro.com",
+        role: "employee",
+        jobType: "Waiter",
+        profileImage: "/placeholder.svg",
+        hourlyRate: 15,
+        password: "employee123"
+      },
+      {
+        id: "3",
+        name: "Mike Johnson",
+        email: "mike@bistro.com",
+        role: "employee",
+        jobType: "Chef",
+        profileImage: "/placeholder.svg",
+        hourlyRate: 20,
+        password: "mike123"
+      },
+      {
+        id: "4",
+        name: "Sarah Williams",
+        email: "sarah@bistro.com",
+        role: "employee",
+        jobType: "Bartender",
+        profileImage: "/placeholder.svg",
+        hourlyRate: 18,
+        password: "sarah123"
+      }
+    ];
+  });
   
   // Mock shifts data
-  const [shifts, setShifts] = React.useState<any[]>([
-    {
-      id: "shift-1",
-      employeeId: "2",
-      day: "Monday",
-      date: "2024-03-25",
-      startTime: "09:00",
-      endTime: "17:00",
-      type: "Morning",
-      status: "completed"
-    },
-    {
-      id: "shift-2",
-      employeeId: "3",
-      day: "Monday",
-      date: "2024-03-25",
-      startTime: "10:00",
-      endTime: "18:00",
-      type: "Morning",
-      status: "completed"
-    },
-    {
-      id: "shift-3",
-      employeeId: "4",
-      day: "Monday",
-      date: "2024-03-25",
-      startTime: "16:00",
-      endTime: "00:00",
-      type: "Evening",
-      status: "scheduled"
-    }
-  ]);
+  const [shifts, setShifts] = React.useState<any[]>(() => {
+    const stored = localStorage.getItem('shifts');
+    if (stored) return JSON.parse(stored);
+    return [
+      {
+        id: "shift-1",
+        employeeId: "2",
+        day: "Monday",
+        date: "2024-03-25",
+        startTime: "09:00",
+        endTime: "17:00",
+        type: "Morning",
+        status: "completed"
+      },
+      {
+        id: "shift-2",
+        employeeId: "3",
+        day: "Monday",
+        date: "2024-03-25",
+        startTime: "10:00",
+        endTime: "18:00",
+        type: "Morning",
+        status: "completed"
+      },
+      {
+        id: "shift-3",
+        employeeId: "4",
+        day: "Monday",
+        date: "2024-03-25",
+        startTime: "16:00",
+        endTime: "00:00",
+        type: "Evening",
+        status: "scheduled"
+      }
+    ];
+  });
   
   // Mock leave requests
   const [leaveRequests, setLeaveRequests] = React.useState<any[]>([
@@ -205,26 +236,51 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   ]);
   
+  // Notification state
+  const [notifications, setNotifications] = React.useState<Notification[]>(() => {
+    const stored = localStorage.getItem('notifications');
+    if (stored) return JSON.parse(stored);
+    return [];
+  });
+  
+  // Notes state
+  const [notes, setNotes] = React.useState<any[]>(() => {
+    const stored = localStorage.getItem('notes');
+    if (stored) return JSON.parse(stored);
+    return [];
+  });
+  
+  // Save employees to localStorage whenever they change
+  React.useEffect(() => {
+    localStorage.setItem('employees', JSON.stringify(employees));
+  }, [employees]);
+  
+  // Save shifts to localStorage whenever they change
+  React.useEffect(() => {
+    localStorage.setItem('shifts', JSON.stringify(shifts));
+  }, [shifts]);
+  
+  // Save notifications to localStorage whenever they change
+  React.useEffect(() => {
+    localStorage.setItem('notifications', JSON.stringify(notifications));
+  }, [notifications]);
+  
+  // Save notes to localStorage whenever they change
+  React.useEffect(() => {
+    localStorage.setItem('notes', JSON.stringify(notes));
+  }, [notes]);
+  
   const login = async (email: string, password: string) => {
     try {
-      // Simulate API call
       await new Promise<void>((resolve) => setTimeout(resolve, 1000));
-      
-      // Find user with matching email
       const userToLogin = employees.find(emp => emp.email.toLowerCase() === email.toLowerCase());
-      
-      if (userToLogin) {
-        // In a real app, you would validate password here
+      if (userToLogin && userToLogin.password === password) {
         setUser(userToLogin);
         setIsAuthenticated(true);
         setIsAdmin(userToLogin.role === "admin");
-        
-        // Store user in localStorage for persistence
         localStorage.setItem("user", JSON.stringify(userToLogin));
-        
         return;
       }
-      
       throw new Error("Invalid credentials");
     } catch (error) {
       console.error("Login failed:", error);
@@ -241,32 +297,27 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   
   const signup = async (name: string, email: string, password: string, jobType: string) => {
     try {
-      // Simulate API call
       await new Promise<void>((resolve) => setTimeout(resolve, 1000));
-      
-      // Check if email is already in use
       if (employees.some(emp => emp.email.toLowerCase() === email.toLowerCase())) {
         throw new Error("Email already in use");
       }
-      
-      // Create new user with employee role
       const newUser: User = {
         id: Math.random().toString(36).substring(2, 9),
         name,
         email,
         jobType,
         role: "employee",
-        hourlyRate: 15 // Default hourly rate
+        hourlyRate: 15,
+        password
       };
-      
-      // Add to employees
-      setEmployees(prev => [...prev, newUser]);
-      
+      setEmployees(prev => {
+        const updated = [...prev, newUser];
+        localStorage.setItem('employees', JSON.stringify(updated));
+        return updated;
+      });
       setUser(newUser);
       setIsAuthenticated(true);
       setIsAdmin(false);
-      
-      // Store user in localStorage for persistence
       localStorage.setItem("user", JSON.stringify(newUser));
     } catch (error) {
       console.error("Signup failed:", error);
@@ -330,17 +381,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return employees;
   };
   
-  const addEmployee = async (employeeData: Omit<User, 'id' | 'password'> & { password?: string }) => {
-    // Simulate API call
+  const addEmployee = async (employeeData: Omit<User, 'id'> & { password?: string }) => {
     await new Promise<void>((resolve) => setTimeout(resolve, 1000));
-    
-    // Generate an ID for the new employee
     const newEmployee: User = {
       ...employeeData,
-      id: Math.random().toString(36).substring(2, 9)
+      id: Math.random().toString(36).substring(2, 9),
+      password: employeeData.password || "employee123" // default if not provided
     };
-    
-    setEmployees(prev => [...prev, newEmployee]);
+    setEmployees(prev => {
+      const updated = [...prev, newEmployee];
+      localStorage.setItem('employees', JSON.stringify(updated));
+      return updated;
+    });
     return true;
   };
   
@@ -401,12 +453,50 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
   
   const startShift = async (userId: string, date: string, notes?: string, lateInfo?: any, shiftId?: string) => {
-    console.log("Starting shift with params:", { userId, date, notes, lateInfo, shiftId });
+    // Find the shift for this user and date (or by shiftId)
+    setShifts(prev => prev.map(shift => {
+      if (
+        (shiftId && shift.id === shiftId) ||
+        (!shiftId && shift.employeeId === userId && shift.date === date)
+      ) {
+        // Only allow starting if not already started
+        if (shift.actualStatus === 'started' || shift.actualStatus === 'completed') return shift;
+        return {
+          ...shift,
+          actualStartTime: new Date().toISOString(),
+          actualStatus: 'started',
+          status: 'started',
+        };
+      }
+      return shift;
+    }));
     return true;
   };
   
-  const endShift = async (userId: string, date: string, notes?: string, overtime?: number) => {
-    console.log("Ending shift with params:", { userId, date, notes, overtime });
+  const endShift = async (userId: string, date: string, notes?: string, overtime?: number, shiftId?: string) => {
+    setShifts(prev => prev.map(shift => {
+      if (
+        (shiftId && shift.id === shiftId) ||
+        (!shiftId && shift.employeeId === userId && shift.date === date)
+      ) {
+        // Only allow ending if started and not already completed
+        if (shift.actualStatus !== 'started') return shift;
+        const actualStart = shift.actualStartTime ? new Date(shift.actualStartTime) : null;
+        const actualEnd = new Date();
+        let duration = null;
+        if (actualStart) {
+          duration = (actualEnd.getTime() - actualStart.getTime()) / 3600000;
+        }
+        return {
+          ...shift,
+          actualEndTime: actualEnd.toISOString(),
+          actualStatus: 'completed',
+          status: 'completed',
+          duration,
+        };
+      }
+      return shift;
+    }));
     return true;
   };
   
@@ -476,14 +566,84 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
   
   const requestLeave = async (leaveData: any) => {
+    // Add a new leave request
+    const newLeave = {
+      id: Math.random().toString(36).substring(2, 9),
+      employeeId: leaveData.employeeId,
+      startDate: leaveData.startDate,
+      endDate: leaveData.endDate,
+      type: leaveData.type,
+      reason: leaveData.reason,
+      status: 'pending',
+      requestDate: new Date().toISOString(),
+    };
+    setLeaveRequests(prev => {
+      const updated = [...prev, newLeave];
+      localStorage.setItem('leaveRequests', JSON.stringify(updated));
+      return updated;
+    });
     return true;
   };
   
   const approveLeave = async (leaveId: string, note?: string) => {
+    setLeaveRequests(prev => {
+      const updated = prev.map(l => l.id === leaveId ? { ...l, status: 'approved', responseDate: new Date().toISOString(), responseNote: note } : l);
+      localStorage.setItem('leaveRequests', JSON.stringify(updated));
+      // Notify employee
+      const leave = updated.find(l => l.id === leaveId);
+      if (leave) {
+        setNotifications(prev => [
+          ...prev,
+          {
+            id: Math.random().toString(36).substring(2, 9),
+            userId: leave.employeeId,
+            title: 'Leave Approved',
+            message: `Your leave request (${leave.startDate} to ${leave.endDate}) was approved.${note ? ' Reply: ' + note : ''}`,
+            type: 'message',
+            date: new Date().toISOString(),
+            read: false
+          }
+        ]);
+        // Remove shifts that overlap with the leave period
+        setShifts(prevShifts => {
+          const start = new Date(leave.startDate);
+          const end = new Date(leave.endDate);
+          const filtered = prevShifts.filter(shift => {
+            if (shift.employeeId !== leave.employeeId || !shift.date) return true;
+            const shiftDate = new Date(shift.date);
+            return shiftDate < start || shiftDate > end;
+          });
+          localStorage.setItem('shifts', JSON.stringify(filtered));
+          return filtered;
+        });
+      }
+      return updated;
+    });
     return true;
   };
   
   const rejectLeave = async (leaveId: string, note?: string) => {
+    setLeaveRequests(prev => {
+      const updated = prev.map(l => l.id === leaveId ? { ...l, status: 'rejected', responseDate: new Date().toISOString(), responseNote: note } : l);
+      localStorage.setItem('leaveRequests', JSON.stringify(updated));
+      // Notify employee
+      const leave = updated.find(l => l.id === leaveId);
+      if (leave) {
+        setNotifications(prev => [
+          ...prev,
+          {
+            id: Math.random().toString(36).substring(2, 9),
+            userId: leave.employeeId,
+            title: 'Leave Rejected',
+            message: `Your leave request (${leave.startDate} to ${leave.endDate}) was rejected.${note ? ' Reply: ' + note : ''}`,
+            type: 'message',
+            date: new Date().toISOString(),
+            read: false
+          }
+        ]);
+      }
+      return updated;
+    });
     return true;
   };
   
@@ -570,6 +730,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   
   const createShift = (shift: any) => {
     setShifts(prev => [...prev, shift]);
+    // Add notification for the assigned employee
+    setNotifications(prev => [
+      ...prev,
+      {
+        id: Math.random().toString(36).substring(2, 9),
+        userId: shift.employeeId,
+        title: 'Shift Assignment',
+        message: `You have been assigned a new shift on ${shift.date} (${shift.startTime} - ${shift.endTime}).`,
+        type: 'shift',
+        date: new Date().toISOString(),
+        read: false
+      }
+    ]);
     return true;
   };
   
@@ -614,6 +787,32 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       attendanceRate: 90,
       averageHoursWorked: 7.5
     };
+  };
+  
+  const markNotificationAsRead = (id: string) => {
+    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+  };
+  
+  // Add a note for an employee
+  const addNote = async (employeeId: string, content: string, category?: string) => {
+    const newNote = {
+      id: Math.random().toString(36).substring(2, 9),
+      employeeId,
+      content,
+      date: new Date().toISOString(),
+      category: category || 'general',
+    };
+    setNotes(prev => {
+      const updated = [...prev, newNote];
+      localStorage.setItem('notes', JSON.stringify(updated));
+      return updated;
+    });
+    return true;
+  };
+  
+  // Get notes for a specific employee
+  const getNotesByEmployee = (employeeId: string) => {
+    return notes.filter(note => note.employeeId === employeeId);
   };
   
   // Check for existing user session on initial load
@@ -675,7 +874,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         generatePayroll,
         processPayroll,
         payPayroll,
-        getAttendanceReports
+        getAttendanceReports,
+        notifications,
+        markNotificationAsRead,
+        addNote,
+        getNotesByEmployee
       }}
     >
       {children}

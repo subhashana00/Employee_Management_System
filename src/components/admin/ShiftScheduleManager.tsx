@@ -40,7 +40,7 @@ import { format } from "date-fns";
 import { Shift } from "@/types/attendance";
 
 const ShiftScheduleManager = () => {
-  const { getEmployees, getShifts, createShift, updateShift, deleteShift } =
+  const { getEmployees, getShifts, createShift, updateShift, deleteShift, startShift, endShift } =
     useAuth();
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [selectedDate, setSelectedDate] = useState(
@@ -69,13 +69,12 @@ const ShiftScheduleManager = () => {
   useEffect(() => {
     setIsLoading(true);
     setTimeout(() => {
-      let loadedShifts = [];
+      let loadedShifts = getShifts();
+      if (selectedDate) {
+        loadedShifts = loadedShifts.filter(shift => shift.date === selectedDate);
+      }
       if (selectedEmployee) {
-        loadedShifts = getShifts(undefined, selectedEmployee);
-      } else if (selectedDate) {
-        loadedShifts = getShifts(selectedDate);
-      } else {
-        loadedShifts = getShifts();
+        loadedShifts = loadedShifts.filter(shift => shift.employeeId === selectedEmployee);
       }
       setShifts(loadedShifts as Shift[]);
       setIsLoading(false);
@@ -325,10 +324,14 @@ const ShiftScheduleManager = () => {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Employee</TableHead>
-                    <TableHead>Date/Day</TableHead>
-                    <TableHead>Time</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Day</TableHead>
+                    <TableHead>Shift Time</TableHead>
                     <TableHead>Type</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>Actual Start</TableHead>
+                    <TableHead>Actual End</TableHead>
+                    <TableHead>Working Hours</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -357,11 +360,14 @@ const ShiftScheduleManager = () => {
                         </div>
                       </TableCell>
                       <TableCell>{getShiftTypeBadge(shift.type)}</TableCell>
-                      <TableCell>{getShiftStatusBadge(shift.status)}</TableCell>
+                      <TableCell>{shift.status === 'completed' ? 'Completed' : shift.status === 'started' ? 'In Progress' : shift.status === 'missed' ? 'Missed' : 'Scheduled'}</TableCell>
+                      <TableCell>{shift.actualStartTime ? new Date(shift.actualStartTime).toLocaleTimeString() : '-'}</TableCell>
+                      <TableCell>{shift.actualEndTime ? new Date(shift.actualEndTime).toLocaleTimeString() : '-'}</TableCell>
+                      <TableCell>{shift.duration ? shift.duration.toFixed(2) + ' hrs' : '-'}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
                           <Button
-                            variant="ghost"
+                            variant="outline"
                             size="sm"
                             onClick={() => handleAddEditShift(shift)}
                             disabled={isLoading}
@@ -370,7 +376,7 @@ const ShiftScheduleManager = () => {
                             <span className="sr-only">Edit</span>
                           </Button>
                           <Button
-                            variant="ghost"
+                            variant="outline"
                             size="sm"
                             onClick={() => handleOpenDeleteDialog(shift)}
                             disabled={isLoading}

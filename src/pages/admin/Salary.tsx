@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
@@ -8,6 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { ArrowLeft, DollarSign, ArrowUpDown, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { toast } from 'sonner';
 
 export default function SalaryManagement() {
   const { isAuthenticated, isAdmin, getEmployees } = useAuth();
@@ -72,7 +72,30 @@ export default function SalaryManagement() {
     // Assuming 40 hours per week, 4 weeks per month
     return (hourlyRate * 40 * 4).toFixed(2);
   };
-  
+
+  const handleExportSalaryData = () => {
+    const headers = ["Name", "Email", "Job Type", "Hourly Rate", "Monthly Salary", "YTD Earnings"];
+    const rows = sortedEmployees.map(employee => [
+      employee.name,
+      employee.email,
+      employee.jobType,
+      employee.hourlyRate.toFixed(2),
+      calculateMonthlySalary(employee.hourlyRate),
+      (parseFloat(calculateMonthlySalary(employee.hourlyRate)) * (Math.floor(Math.random() * 6) + 1)).toFixed(2) // Mock YTD
+    ]);
+
+    const csvContent = [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', 'salary_data.csv');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success('Salary data exported successfully!');
+  };
+
   return (
     <AdminLayout>
       <div className="container mx-auto p-4 sm:p-6">
@@ -85,7 +108,7 @@ export default function SalaryManagement() {
             </Button>
             <h1 className="text-2xl sm:text-3xl font-bold">Salary Management</h1>
           </div>
-          <Button className="w-full sm:w-auto">
+          <Button className="w-full sm:w-auto" onClick={handleExportSalaryData}>
             <Download className="mr-2 h-4 w-4" />
             Export Salary Data
           </Button>

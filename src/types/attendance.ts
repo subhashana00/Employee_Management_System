@@ -1,4 +1,3 @@
-
 // Types for attendance tracking
 export type AttendanceStatus = 'pending' | 'started' | 'completed' | 'absent';
 
@@ -43,7 +42,10 @@ export type Shift = {
   startTime: string;
   endTime: string;
   type: string;
-  status?: 'scheduled' | 'completed' | 'missed';
+  status?: 'scheduled' | 'completed' | 'missed' | 'started';
+  actualStartTime?: string | null;
+  actualEndTime?: string | null;
+  actualStatus?: 'not_started' | 'started' | 'completed' | 'missed';
 };
 
 // Types for payroll

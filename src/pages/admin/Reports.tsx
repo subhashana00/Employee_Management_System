@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
@@ -27,6 +26,11 @@ export default function Reports() {
     employees: 'pending',
     financial: 'pending'
   });
+  const [reportData, setReportData] = useState<Record<string, any[]>>({
+    shifts: [],
+    employees: [],
+    financial: []
+  });
   
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
@@ -40,7 +44,28 @@ export default function Reports() {
     toast.promise(
       new Promise((resolve) => {
         setTimeout(() => {
-          setReportStatus({...reportStatus, [reportType]: 'generated'});
+          // Simulate data generation
+          let generatedData: any[] = [];
+          if (reportType === 'shifts') {
+            generatedData = [
+              { date: '2024-06-01', employee: 'Jane Smith', hours: 8, status: 'completed' },
+              { date: '2024-06-01', employee: 'Mike Johnson', hours: 7.5, status: 'completed' },
+              { date: '2024-06-02', employee: 'Sarah Williams', hours: 8, status: 'completed' },
+            ];
+          } else if (reportType === 'employees') {
+            generatedData = [
+              { employee: 'Jane Smith', attendanceRate: '95%', leavesUsed: 1 },
+              { employee: 'Mike Johnson', attendanceRate: '92%', leavesUsed: 2 },
+              { employee: 'Sarah Williams', attendanceRate: '98%', leavesUsed: 0 },
+            ];
+          } else if (reportType === 'financial') {
+            generatedData = [
+              { month: 'June', totalSalaries: 15000, totalOvertime: 1200 },
+              { month: 'May', totalSalaries: 14500, totalOvertime: 1000 },
+            ];
+          }
+          setReportStatus(prev => ({...prev, [reportType]: 'generated'}));
+          setReportData(prev => ({...prev, [reportType]: generatedData}));
           resolve(true);
         }, 1500);
       }),
@@ -53,7 +78,25 @@ export default function Reports() {
   };
 
   const handleDownload = (reportType: string) => {
-    toast.success(`${reportType.charAt(0).toUpperCase() + reportType.slice(1)} report downloaded`);
+    const data = reportData[reportType];
+    if (!data || data.length === 0) {
+      toast.error(`No data to download for ${reportType} report. Please generate it first.`);
+      return;
+    }
+
+    const headers = Object.keys(data[0]);
+    const rows = data.map(row => headers.map(header => row[header]));
+
+    const csvContent = [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `${reportType}_report.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success(`${reportType.charAt(0).toUpperCase() + reportType.slice(1)} report downloaded successfully!`);
   };
 
   const handleShare = (reportType: string) => {
@@ -61,18 +104,38 @@ export default function Reports() {
   };
 
   const handleExportAll = () => {
-    toast.promise(
-      new Promise((resolve) => {
-        setTimeout(() => {
-          resolve(true);
-        }, 2000);
-      }),
-      {
-        loading: 'Exporting all reports...',
-        success: 'All reports exported successfully',
-        error: 'Failed to export reports'
+    if (Object.values(reportStatus).some(status => status === 'pending')) {
+      toast.error('Please generate all reports before exporting all.');
+      return;
+    }
+
+    let allReportsData = [];
+    for (const type in reportData) {
+      if (reportData[type].length > 0) {
+        allReportsData.push(`Report Type: ${type.toUpperCase()}\n`);
+        const headers = Object.keys(reportData[type][0]);
+        const rows = reportData[type].map(row => headers.map(header => row[header]));
+        allReportsData.push(headers.join(","));
+        allReportsData.push(...rows.map(e => e.join(",")));
+        allReportsData.push("\n"); // Add a newline between different report types
       }
-    );
+    }
+
+    if (allReportsData.length === 0) {
+      toast.info('No reports generated to export.');
+      return;
+    }
+
+    const csvContent = allReportsData.join("\n");
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', 'all_reports.csv');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success('All reports exported successfully!');
   };
   
   const handleSort = () => {

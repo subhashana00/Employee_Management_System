@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
@@ -13,7 +12,8 @@ import {
   Menu,
   X,
   BellRing,
-  Settings
+  Settings,
+  ClipboardList
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -64,6 +64,7 @@ export default function EmployeeLayout({ children }: EmployeeLayoutProps) {
     { name: 'Dashboard', path: '/employee', icon: LayoutDashboard },
     { name: 'My Profile', path: '/employee/profile', icon: User },
     { name: 'My Shifts', path: '/employee/shifts', icon: Calendar },
+    { name: 'Leave Requests', path: '/employee/leaves', icon: ClipboardList },
     { name: 'Notifications', path: '/employee/notifications', icon: BellRing },
     { name: 'Settings', path: '/employee/settings', icon: Settings },
   ];

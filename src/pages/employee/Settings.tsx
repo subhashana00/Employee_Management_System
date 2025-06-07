@@ -1,5 +1,4 @@
-
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import EmployeeLayout from '@/components/layout/EmployeeLayout';
@@ -21,9 +20,10 @@ import {
   FormMessage
 } from '@/components/ui/form';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ImageUpload } from '@/components/ui/image-upload';
 
 export default function EmployeeSettings() {
-  const { isAuthenticated, isAdmin, user } = useAuth();
+  const { isAuthenticated, isAdmin, user, updateProfileImage, getAttendanceReport, getShifts } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const [showPassword, setShowPassword] = useState(false);
   const [notificationSettings, setNotificationSettings] = useState({
@@ -39,6 +39,9 @@ export default function EmployeeSettings() {
     newPassword: '',
     confirmPassword: ''
   });
+  
+  const [profileImage, setProfileImage] = useState(user?.profileImage || '');
+  const [isUpdatingImage, setIsUpdatingImage] = useState(false);
   
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
@@ -92,6 +95,72 @@ export default function EmployeeSettings() {
     toast.success('Settings saved successfully');
   };
   
+  const handleImageChange = async (imageData: string) => {
+    if (!user) return;
+    setIsUpdatingImage(true);
+    try {
+      await updateProfileImage(user.id, imageData);
+      setProfileImage(imageData);
+      toast.success('Profile image updated');
+    } finally {
+      setIsUpdatingImage(false);
+    }
+  };
+  
+  const handleDownloadData = () => {
+    if (!user) return;
+    const attendance = getAttendanceReport(user.id, 'all');
+    const data = {
+      profile: user,
+      attendance,
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'my_employee_data.json';
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success('Data downloaded');
+  };
+  
+  useEffect(() => {
+    if (notificationSettings.shiftReminders && user) {
+      // Get upcoming shifts for the user
+      const allShifts = user ? getShifts(undefined, user.id) : [];
+      const now = new Date();
+      allShifts.forEach(shift => {
+        if (shift.status === 'scheduled' && shift.date) {
+          const shiftDateTime = new Date(`${shift.date}T${shift.startTime}`);
+          const reminderTime = new Date(shiftDateTime.getTime() - 30 * 60000); // 30 min before
+          if (reminderTime > now) {
+            const timeout = reminderTime.getTime() - now.getTime();
+            // Schedule browser notification
+            if ('Notification' in window) {
+              if (Notification.permission === 'granted') {
+                setTimeout(() => {
+                  new Notification('Shift Reminder', {
+                    body: `You have a shift at ${shift.startTime} on ${shift.day}.`,
+                  });
+                }, timeout);
+              } else if (Notification.permission !== 'denied') {
+                Notification.requestPermission().then(permission => {
+                  if (permission === 'granted') {
+                    setTimeout(() => {
+                      new Notification('Shift Reminder', {
+                        body: `You have a shift at ${shift.startTime} on ${shift.day}.`,
+                      });
+                    }, timeout);
+                  }
+                });
+              }
+            }
+          }
+        }
+      });
+    }
+  }, [notificationSettings.shiftReminders, user]);
+  
   return (
     <EmployeeLayout>
       <div className="container mx-auto p-4 sm:p-6">
@@ -136,6 +205,11 @@ export default function EmployeeSettings() {
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-6">
+                    <div className="flex flex-col items-center mb-6">
+                      <ImageUpload value={profileImage} onImageChange={handleImageChange} avatarSize="xl" />
+                      {isUpdatingImage && <span className="text-xs text-muted-foreground mt-2">Updating...</span>}
+                    </div>
+                    <Button onClick={handleDownloadData} className="mb-4" variant="outline">Download My Data</Button>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div className="space-y-2">
                         <Label htmlFor="name">Full Name</Label>

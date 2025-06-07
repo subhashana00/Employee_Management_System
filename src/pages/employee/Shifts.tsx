@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
@@ -15,7 +14,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 
 export default function EmployeeShifts() {
-  const { isAuthenticated, isEmployee, user, getShifts } = useAuth();
+  const { isAuthenticated, isEmployee, user, getShifts, startShift, endShift } = useAuth();
   const isMobile = useIsMobile();
   const [isLoading, setIsLoading] = useState(true);
   
@@ -25,7 +24,7 @@ export default function EmployeeShifts() {
   const tableSection = useInView({ threshold: 0.1 });
   
   // Get shifts for the employee using getShifts instead of getShiftsByEmployee
-  const shifts = user ? getShifts(user.id) : [];
+  const shifts = user ? getShifts(undefined, user.id) : [];
   
   // Calculate current month stats
   const currentMonth = new Date().toLocaleString('default', { month: 'long' });
@@ -48,6 +47,29 @@ export default function EmployeeShifts() {
     
     return () => clearTimeout(timer);
   }, []);
+  
+  const handleStartShift = async (shift: any) => {
+    await startShift(user.id, shift.date, undefined, undefined, shift.id);
+  };
+  const handleEndShift = async (shift: any) => {
+    await endShift(user.id, shift.date, undefined, undefined, shift.id);
+  };
+  
+  const getWorkedHours = (shift: any) => {
+    if (shift.actualStartTime && shift.actualEndTime) {
+      const start = new Date(shift.actualStartTime);
+      const end = new Date(shift.actualEndTime);
+      return ((end.getTime() - start.getTime()) / 3600000);
+    }
+    return null;
+  };
+  const getSalary = (shift: any) => {
+    const hours = getWorkedHours(shift);
+    if (hours && user?.hourlyRate) {
+      return (hours * user.hourlyRate).toFixed(2);
+    }
+    return null;
+  };
   
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
@@ -151,14 +173,18 @@ export default function EmployeeShifts() {
                             <TableHead>Date</TableHead>
                             <TableHead className="hidden sm:table-cell">Day</TableHead>
                             <TableHead>Shift Time</TableHead>
+                            <TableHead>Scheduled Time</TableHead>
+                            <TableHead>Attended Time</TableHead>
                             <TableHead className="text-right">Hours</TableHead>
                             <TableHead>Status</TableHead>
+                            <TableHead>Worked</TableHead>
+                            <TableHead>Salary</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           {shifts.length === 0 ? (
                             <TableRow>
-                              <TableCell colSpan={5} className="text-center py-6">
+                              <TableCell colSpan={9} className="text-center py-6">
                                 <div className="flex flex-col items-center justify-center text-muted-foreground">
                                   <Calendar className="h-10 w-10 mb-2" />
                                   <p>No shifts scheduled</p>
@@ -173,13 +199,22 @@ export default function EmployeeShifts() {
                               const startHours = startParts[0] + startParts[1] / 60;
                               const endHours = endParts[0] + endParts[1] / 60;
                               const hours = endHours - startHours;
-                              
+                              const canStart = shift.status === 'scheduled' && (!shift.actualStatus || shift.actualStatus === 'not_started');
+                              const canEnd = shift.status === 'started' && shift.actualStatus === 'started';
+                              const workedHours = getWorkedHours(shift);
+                              const salary = getSalary(shift);
+                              const scheduledTime = `${shift.startTime} - ${shift.endTime}`;
+                              let attendedTime = '-';
+                              if (shift.actualStartTime && shift.actualEndTime) {
+                                const start = new Date(shift.actualStartTime);
+                                const end = new Date(shift.actualEndTime);
+                                attendedTime = `${start.getHours().toString().padStart(2, '0')}:${start.getMinutes().toString().padStart(2, '0')} - ${end.getHours().toString().padStart(2, '0')}:${end.getMinutes().toString().padStart(2, '0')}`;
+                              } else if (shift.actualStartTime) {
+                                const start = new Date(shift.actualStartTime);
+                                attendedTime = `${start.getHours().toString().padStart(2, '0')}:${start.getMinutes().toString().padStart(2, '0')} - ...`;
+                              }
                               return (
-                                <TableRow 
-                                  key={i}
-                                  className="animate-fadeIn"
-                                  style={{ animationDelay: `${i * 50}ms` }}
-                                >
+                                <TableRow key={i} className="animate-fadeIn" style={{ animationDelay: `${i * 50}ms` }}>
                                   <TableCell className="font-medium">
                                     {shift.date ? new Date(shift.date).toLocaleDateString() : 'N/A'}
                                   </TableCell>
@@ -187,6 +222,8 @@ export default function EmployeeShifts() {
                                   <TableCell>
                                     <span className="whitespace-nowrap">{shift.startTime} - {shift.endTime}</span>
                                   </TableCell>
+                                  <TableCell>{scheduledTime}</TableCell>
+                                  <TableCell>{attendedTime}</TableCell>
                                   <TableCell className="text-right">{hours.toFixed(1)}</TableCell>
                                   <TableCell>
                                     <Badge 
@@ -196,13 +233,24 @@ export default function EmployeeShifts() {
                                           ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100 border-green-200 dark:border-green-800' 
                                           : shift.status === 'missed'
                                           ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100 border-red-200 dark:border-red-800'
+                                          : shift.status === 'started'
+                                          ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100 border-yellow-200 dark:border-yellow-800'
                                           : 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100 border-blue-200 dark:border-blue-800'
                                       }
                                     >
-                                      {shift.status === 'completed' ? 'Completed' : 
-                                       shift.status === 'missed' ? 'Missed' : 'Scheduled'}
+                                      {shift.status === 'completed' ? 'Completed' :
+                                        shift.status === 'missed' ? 'Missed' :
+                                        shift.status === 'started' ? 'In Progress' : 'Scheduled'}
                                     </Badge>
+                                    {shift.actualStartTime && (
+                                      <div className="text-xs text-muted-foreground">Start: {new Date(shift.actualStartTime).toLocaleTimeString()}</div>
+                                    )}
+                                    {shift.actualEndTime && (
+                                      <div className="text-xs text-muted-foreground">End: {new Date(shift.actualEndTime).toLocaleTimeString()}</div>
+                                    )}
                                   </TableCell>
+                                  <TableCell>{workedHours ? workedHours.toFixed(2) + ' hrs' : '-'}</TableCell>
+                                  <TableCell>{salary ? '$' + salary : '-'}</TableCell>
                                 </TableRow>
                               );
                             })
